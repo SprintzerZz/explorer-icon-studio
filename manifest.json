@@ -1,0 +1,9 @@
+{
+  "id": "explorer-icon-studio",
+  "name": "Explorer Icon Studio",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Replace file and folder icons in the Obsidian file explorer.",
+  "author": "SpZyph3r",
+  "isDesktopOnly": false
+}

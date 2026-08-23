@@ -1,5 +1,6 @@
 import {
   App,
+  Menu,
   Modal,
   Notice,
   Plugin,
@@ -199,7 +200,7 @@ function parseSvgElement(svgMarkup: string): SVGSVGElement | null {
   const documentEl = parser.parseFromString(svgMarkup, "image/svg+xml");
   const svgEl = documentEl.documentElement;
 
-  if (!(svgEl instanceof SVGSVGElement) || svgEl.tagName.toLowerCase() !== "svg") {
+  if (!svgEl.instanceOf(SVGSVGElement) || svgEl.tagName.toLowerCase() !== "svg") {
     return null;
   }
 
@@ -219,6 +220,12 @@ function replaceWithSvgMarkup(containerEl: HTMLElement, svgMarkup: string): bool
   clearElement(containerEl);
   containerEl.appendChild(svgEl);
   return true;
+}
+
+function runAsync(callback: () => Promise<void>): () => void {
+  return () => {
+    void callback();
+  };
 }
 
 function escapeAttribute(value: string): string {
@@ -536,7 +543,7 @@ export default class FileFolderIconReplacerPlugin extends Plugin {
 
         if (
           mutation.type === "attributes" &&
-          mutation.target instanceof HTMLElement &&
+          mutation.target.instanceOf(HTMLElement) &&
           (mutation.target.matches(".nav-folder") || mutation.target.matches(".nav-folder-title"))
         ) {
           this.scheduleRefresh();
@@ -578,7 +585,7 @@ export default class FileFolderIconReplacerPlugin extends Plugin {
       return reusableIconEl;
     }
 
-    const createdIconEl = document.createElement("span");
+    const createdIconEl = createSpan();
     createdIconEl.className = ICON_CLASS;
     createdIconEl.dataset.fileFolderIconReplacerIcon = "true";
     createdIconEl.dataset.fileFolderIconReplacerInjected = "true";
@@ -647,11 +654,11 @@ export default class FileFolderIconReplacerPlugin extends Plugin {
   private findReusableIconElement(parentEl: HTMLElement, contentEl: HTMLElement): HTMLSpanElement | null {
     const directChildren = Array.from(parentEl.children);
     const contentIndex = directChildren.indexOf(contentEl);
-    const candidates = directChildren.slice(0, contentIndex).filter((child) => child instanceof HTMLElement);
+    const candidates = directChildren.slice(0, contentIndex).filter((child) => child.instanceOf(HTMLElement));
 
     for (let index = candidates.length - 1; index >= 0; index -= 1) {
       const candidate = candidates[index];
-      if (!(candidate instanceof HTMLElement)) {
+      if (!candidate.instanceOf(HTMLElement)) {
         continue;
       }
 
@@ -660,10 +667,10 @@ export default class FileFolderIconReplacerPlugin extends Plugin {
       }
 
       if (candidate.classList.contains(ICON_CLASS)) {
-        return candidate as HTMLSpanElement;
+        return candidate;
       }
 
-      return candidate as HTMLSpanElement;
+      return candidate;
     }
 
     return null;
@@ -674,7 +681,7 @@ export default class FileFolderIconReplacerPlugin extends Plugin {
     const contentIndex = directChildren.indexOf(contentEl);
 
     directChildren.forEach((child, index) => {
-      if (!(child instanceof HTMLElement)) {
+      if (!child.instanceOf(HTMLElement)) {
         return;
       }
 
@@ -836,7 +843,7 @@ export default class FileFolderIconReplacerPlugin extends Plugin {
       .filter((value) => value.path.length > 0);
   }
 
-  private addPathOverrideMenuItems(menu: { addItem: (cb: (item: any) => any) => any }, file: TAbstractFile): void {
+  private addPathOverrideMenuItems(menu: Menu, file: TAbstractFile): void {
     if (file instanceof TFolder) {
       menu.addItem((item) => {
         item.setTitle("Set folder icon for this folder").setIcon("paintbrush").onClick(() => {
@@ -846,11 +853,11 @@ export default class FileFolderIconReplacerPlugin extends Plugin {
 
       if (this.getFolderPathOverride(file.path)) {
         menu.addItem((item) => {
-          item.setTitle("Clear custom folder icon").setIcon("eraser").setWarning(true).onClick(async () => {
+          item.setTitle("Clear custom folder icon").setIcon("eraser").setWarning(true).onClick(runAsync(async () => {
             this.settings.folderPathOverrides = this.settings.folderPathOverrides.filter((entry) => entry.path !== file.path);
             await this.persistAndRefresh();
             new Notice(`Cleared folder icon: ${file.path}`);
-          });
+          }));
         });
       }
 
@@ -866,11 +873,11 @@ export default class FileFolderIconReplacerPlugin extends Plugin {
 
       if (this.getFilePathOverride(file.path)) {
         menu.addItem((item) => {
-          item.setTitle("Clear custom file icon").setIcon("eraser").setWarning(true).onClick(async () => {
+          item.setTitle("Clear custom file icon").setIcon("eraser").setWarning(true).onClick(runAsync(async () => {
             this.settings.filePathOverrides = this.settings.filePathOverrides.filter((entry) => entry.path !== file.path);
             await this.persistAndRefresh();
             new Notice(`Cleared file icon: ${file.path}`);
-          });
+          }));
         });
       }
     }
@@ -999,7 +1006,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
 
     const gridEl = this.containerEl.createDiv({ cls: "file-folder-icon-replacer__recent-grid" });
     if (this.plugin.settings.recentIcons.length === 0) {
-      gridEl.createEl("div", {
+      gridEl.createDiv({
         cls: "file-folder-icon-replacer__empty-state",
         text: "还没有最近使用的图标。",
       });
@@ -1023,11 +1030,11 @@ class IconReplacerSettingTab extends PluginSettingTab {
         text: "移除",
         attr: { type: "button" },
       });
-      deleteButton.addEventListener("click", async () => {
+      deleteButton.addEventListener("click", runAsync(async () => {
         this.plugin.settings.recentIcons = this.plugin.settings.recentIcons.filter((item) => item !== iconRef);
         await this.plugin.saveSettings();
         this.display();
-      });
+      }));
     });
 
     helpEl.insertAdjacentText("beforeend", " 选择器中也会优先显示这些图标。");
@@ -1060,7 +1067,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
 
     const listEl = this.containerEl.createDiv({ cls: "file-folder-icon-replacer__custom-list" });
     if (this.plugin.settings.customIcons.length === 0) {
-      listEl.createEl("div", {
+      listEl.createDiv({
         cls: "file-folder-icon-replacer__empty-state",
         text: "还没有自定义 SVG 图标。",
       });
@@ -1075,7 +1082,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
 
       const titleWrapEl = headerEl.createDiv({ cls: "file-folder-icon-replacer__rule-title-wrap" });
       titleWrapEl.createEl("strong", { text: icon.name });
-      titleWrapEl.createEl("div", {
+      titleWrapEl.createDiv({
         cls: "file-folder-icon-replacer__rule-meta",
         text: `ID: ${icon.id}`,
       });
@@ -1104,7 +1111,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
         cls: "mod-warning",
         attr: { type: "button" },
       });
-      deleteButton.addEventListener("click", async () => {
+      deleteButton.addEventListener("click", runAsync(async () => {
         this.plugin.settings.customIcons = this.plugin.settings.customIcons.filter((item) => item.id !== icon.id);
         this.plugin.settings.recentIcons = this.plugin.settings.recentIcons.filter(
           (item) => item !== makeCustomIconRef(icon.id),
@@ -1150,7 +1157,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
         await this.plugin.persistAndRefresh();
         this.display();
         new Notice(`已删除自定义图标: ${icon.name}`);
-      });
+      }));
     });
   }
 
@@ -1166,7 +1173,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
     const folderOverrides = this.plugin.settings.folderPathOverrides;
 
     if (fileOverrides.length === 0 && folderOverrides.length === 0) {
-      listEl.createEl("div", {
+      listEl.createDiv({
         cls: "file-folder-icon-replacer__empty-state",
         text: "还没有局部图标。",
       });
@@ -1181,7 +1188,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
 
       const titleWrapEl = headerEl.createDiv({ cls: "file-folder-icon-replacer__rule-title-wrap" });
       titleWrapEl.createEl("strong", { text: getBaseName(override.path) });
-      titleWrapEl.createEl("div", {
+      titleWrapEl.createDiv({
         cls: "file-folder-icon-replacer__rule-meta",
         text: override.path,
       });
@@ -1207,11 +1214,11 @@ class IconReplacerSettingTab extends PluginSettingTab {
         cls: "mod-warning",
         attr: { type: "button" },
       });
-      deleteButton.addEventListener("click", async () => {
+      deleteButton.addEventListener("click", runAsync(async () => {
         this.plugin.settings.filePathOverrides = this.plugin.settings.filePathOverrides.filter((item) => item.id !== override.id);
         await this.plugin.persistAndRefresh();
         this.display();
-      });
+      }));
     });
 
     folderOverrides.forEach((override) => {
@@ -1225,7 +1232,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
 
       const titleWrapEl = headerEl.createDiv({ cls: "file-folder-icon-replacer__rule-title-wrap" });
       titleWrapEl.createEl("strong", { text: getBaseName(override.path) });
-      titleWrapEl.createEl("div", {
+      titleWrapEl.createDiv({
         cls: "file-folder-icon-replacer__rule-meta",
         text: override.path,
       });
@@ -1247,13 +1254,13 @@ class IconReplacerSettingTab extends PluginSettingTab {
         cls: "mod-warning",
         attr: { type: "button" },
       });
-      deleteButton.addEventListener("click", async () => {
+      deleteButton.addEventListener("click", runAsync(async () => {
         this.plugin.settings.folderPathOverrides = this.plugin.settings.folderPathOverrides.filter(
           (item) => item.id !== override.id,
         );
         await this.plugin.persistAndRefresh();
         this.display();
-      });
+      }));
     });
   }
 
@@ -1268,7 +1275,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
       .setName("新增文件规则")
       .setDesc("为特定后缀设置图标。")
       .addButton((button) => {
-        button.setButtonText("添加规则").onClick(async () => {
+        button.setButtonText("添加规则").onClick(runAsync(async () => {
           this.plugin.settings.fileRules.push({
             id: createId(),
             extension: "md",
@@ -1276,12 +1283,12 @@ class IconReplacerSettingTab extends PluginSettingTab {
           });
           await this.plugin.persistAndRefresh();
           this.display();
-        });
+        }));
       });
 
     const listEl = this.containerEl.createDiv({ cls: "file-folder-icon-replacer__rules-list" });
     if (this.plugin.settings.fileRules.length === 0) {
-      listEl.createEl("div", {
+      listEl.createDiv({
         cls: "file-folder-icon-replacer__empty-state",
         text: "还没有文件后缀规则。",
       });
@@ -1309,11 +1316,11 @@ class IconReplacerSettingTab extends PluginSettingTab {
         attr: { type: "text", placeholder: "例如 md" },
       });
       extInputEl.value = rule.extension;
-      extInputEl.addEventListener("change", async () => {
+      extInputEl.addEventListener("change", runAsync(async () => {
         rule.extension = normalizeExtension(extInputEl.value);
         extInputEl.value = rule.extension;
         await this.plugin.persistAndRefresh();
-      });
+      }));
 
       const iconWrapEl = rowEl.createDiv({ cls: "file-folder-icon-replacer__field" });
       iconWrapEl.createEl("label", { text: "图标" });
@@ -1328,11 +1335,11 @@ class IconReplacerSettingTab extends PluginSettingTab {
 
       const actionEl = rowEl.createDiv({ cls: "file-folder-icon-replacer__rule-inline-actions" });
       const deleteButton = actionEl.createEl("button", { text: "删除", cls: "mod-warning", attr: { type: "button" } });
-      deleteButton.addEventListener("click", async () => {
+      deleteButton.addEventListener("click", runAsync(async () => {
         this.plugin.settings.fileRules = this.plugin.settings.fileRules.filter((item) => item.id !== rule.id);
         await this.plugin.persistAndRefresh();
         this.display();
-      });
+      }));
     });
   }
 
@@ -1347,7 +1354,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
       .setName("新增文件夹规则")
       .setDesc("为特定文件夹名称设置图标。")
       .addButton((button) => {
-        button.setButtonText("添加规则").onClick(async () => {
+        button.setButtonText("添加规则").onClick(runAsync(async () => {
           this.plugin.settings.folderRules.push({
             id: createId(),
             folderName: "Assets",
@@ -1356,12 +1363,12 @@ class IconReplacerSettingTab extends PluginSettingTab {
           });
           await this.plugin.persistAndRefresh();
           this.display();
-        });
+        }));
       });
 
     const listEl = this.containerEl.createDiv({ cls: "file-folder-icon-replacer__rules-list" });
     if (this.plugin.settings.folderRules.length === 0) {
-      listEl.createEl("div", {
+      listEl.createDiv({
         cls: "file-folder-icon-replacer__empty-state",
         text: "还没有文件夹名称规则。",
       });
@@ -1387,11 +1394,11 @@ class IconReplacerSettingTab extends PluginSettingTab {
         attr: { type: "text", placeholder: "例如 Assets" },
       });
       nameInputEl.value = rule.folderName;
-      nameInputEl.addEventListener("change", async () => {
+      nameInputEl.addEventListener("change", runAsync(async () => {
         rule.folderName = normalizeFolderName(nameInputEl.value);
         nameInputEl.value = rule.folderName;
         await this.plugin.persistAndRefresh();
-      });
+      }));
 
       const gridEl = cardEl.createDiv({ cls: "file-folder-icon-replacer__rule-grid file-folder-icon-replacer__rule-grid--folder" });
 
@@ -1419,11 +1426,11 @@ class IconReplacerSettingTab extends PluginSettingTab {
 
       const actionEl = cardEl.createDiv({ cls: "file-folder-icon-replacer__rule-inline-actions" });
       const deleteButton = actionEl.createEl("button", { text: "删除规则", cls: "mod-warning", attr: { type: "button" } });
-      deleteButton.addEventListener("click", async () => {
+      deleteButton.addEventListener("click", runAsync(async () => {
         this.plugin.settings.folderRules = this.plugin.settings.folderRules.filter((item) => item.id !== rule.id);
         await this.plugin.persistAndRefresh();
         this.display();
-      });
+      }));
     });
   }
 
@@ -1763,11 +1770,11 @@ class IconPickerModal extends Modal {
     const labelWrapEl = this.currentSelectionEl.createDiv({
       cls: "file-folder-icon-replacer__picker-current-copy",
     });
-    labelWrapEl.createEl("div", {
+    labelWrapEl.createDiv({
       cls: "file-folder-icon-replacer__picker-current-label",
       text: "当前选择",
     });
-    labelWrapEl.createEl("div", {
+    labelWrapEl.createDiv({
       cls: "file-folder-icon-replacer__picker-current-name",
       text: this.options.plugin.describeIconRef(this.options.selectedIconRef),
     });
@@ -1796,7 +1803,7 @@ class IconPickerModal extends Modal {
     });
 
     if (matches.length === 0) {
-      this.recentGridEl.createEl("div", {
+      this.recentGridEl.createDiv({
         cls: "file-folder-icon-replacer__picker-empty",
         text: "没有匹配的最近使用图标。",
       });
@@ -1832,7 +1839,7 @@ class IconPickerModal extends Modal {
     });
 
     if (merged.length === 0) {
-      this.allGridEl.createEl("div", {
+      this.allGridEl.createDiv({
         cls: "file-folder-icon-replacer__picker-empty",
         text: "没有找到匹配的图标。",
       });
@@ -1866,19 +1873,18 @@ class IconPickerModal extends Modal {
     if (parsed.type === "custom") {
       const customIcon = this.options.plugin.getCustomIcon(parsed.value);
       const svgMarkup = customIcon ? extractSvgMarkup(customIcon.svg) : null;
-      if (svgMarkup && replaceWithSvgMarkup(iconEl, svgMarkup)) {
-      } else {
+      if (!svgMarkup || !replaceWithSvgMarkup(iconEl, svgMarkup)) {
         setIcon(iconEl, "circle-help");
       }
     } else {
       setIcon(iconEl, parsed.value);
     }
 
-    itemEl.addEventListener("click", async () => {
+    itemEl.addEventListener("click", runAsync(async () => {
       await this.options.onChoose(iconRef);
       this.close();
       new Notice(`已选择图标: ${this.options.plugin.describeIconRef(iconRef)}`);
-    });
+    }));
 
     labelEl.title = iconRef;
   }
@@ -1979,10 +1985,10 @@ class FolderOverridePickerModal extends Modal {
     });
 
     cancelButton.addEventListener("click", () => this.close());
-    saveButton.addEventListener("click", async () => {
+    saveButton.addEventListener("click", runAsync(async () => {
       await this.options.onChoose(this.closedIconRef, this.openIconRef);
       this.close();
-    });
+    }));
   }
 
   onClose(): void {
@@ -2000,8 +2006,7 @@ class FolderOverridePickerModal extends Modal {
       if (parsed.type === "custom") {
         const customIcon = this.options.plugin.getCustomIcon(parsed.value);
         const svgMarkup = customIcon ? extractSvgMarkup(customIcon.svg) : null;
-        if (svgMarkup && replaceWithSvgMarkup(previewEl, svgMarkup)) {
-        } else {
+        if (!svgMarkup || !replaceWithSvgMarkup(previewEl, svgMarkup)) {
           setIcon(previewEl, "circle-help");
         }
       } else {
@@ -2098,7 +2103,7 @@ class CustomIconEditorModal extends Modal {
       },
     });
     this.svgFileInputEl.className = "file-folder-icon-replacer__hidden-input";
-    this.svgFileInputEl.addEventListener("change", async () => {
+    this.svgFileInputEl.addEventListener("change", runAsync(async () => {
       const file = this.svgFileInputEl?.files?.[0];
       if (!file) {
         return;
@@ -2121,7 +2126,7 @@ class CustomIconEditorModal extends Modal {
       if (this.svgFileInputEl) {
         this.svgFileInputEl.value = "";
       }
-    });
+    }));
 
     this.drawingCanvasEl = drawFieldEl.createEl("canvas", {
       cls: "file-folder-icon-replacer__draw-canvas",
@@ -2175,7 +2180,7 @@ class CustomIconEditorModal extends Modal {
     });
 
     cancelButton.addEventListener("click", () => this.close());
-    saveButton.addEventListener("click", async () => {
+    saveButton.addEventListener("click", runAsync(async () => {
       const name = this.nameInputEl?.value.trim() || "Custom SVG";
       this.syncDrawingToSvgEditor();
       const svg = this.svgInputEl?.value.trim() ?? "";
@@ -2193,7 +2198,7 @@ class CustomIconEditorModal extends Modal {
       });
 
       this.close();
-    });
+    }));
   }
 
   onClose(): void {
@@ -2210,7 +2215,7 @@ class CustomIconEditorModal extends Modal {
     clearElement(this.previewEl);
     const svgMarkup = extractSvgMarkup(this.svgInputEl?.value ?? "");
     if (!svgMarkup) {
-      this.previewEl.createEl("div", {
+      this.previewEl.createDiv({
         cls: "file-folder-icon-replacer__empty-state",
         text: "SVG 预览不可用，请检查内容格式。",
       });

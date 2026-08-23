@@ -10,6 +10,10 @@
   flex: 0 0 auto;
 }
 
+[data-file-folder-icon-replacer-hidden="true"] {
+  display: none !important;
+}
+
 .file-folder-icon-replacer--active::before,
 .file-folder-icon-replacer--active::after,
 .tree-item-self.file-folder-icon-replacer--active::before,

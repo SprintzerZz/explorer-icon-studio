@@ -194,6 +194,33 @@ function extractSvgMarkup(svgText: string): string | null {
   return trimmed;
 }
 
+function parseSvgElement(svgMarkup: string): SVGSVGElement | null {
+  const parser = new DOMParser();
+  const documentEl = parser.parseFromString(svgMarkup, "image/svg+xml");
+  const svgEl = documentEl.documentElement;
+
+  if (!(svgEl instanceof SVGSVGElement) || svgEl.tagName.toLowerCase() !== "svg") {
+    return null;
+  }
+
+  if (svgEl.querySelector("parsererror")) {
+    return null;
+  }
+
+  return svgEl.cloneNode(true) as SVGSVGElement;
+}
+
+function replaceWithSvgMarkup(containerEl: HTMLElement, svgMarkup: string): boolean {
+  const svgEl = parseSvgElement(svgMarkup);
+  if (!svgEl) {
+    return false;
+  }
+
+  clearElement(containerEl);
+  containerEl.appendChild(svgEl);
+  return true;
+}
+
 function escapeAttribute(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -570,8 +597,7 @@ export default class FileFolderIconReplacerPlugin extends Plugin {
       const customIcon = this.getCustomIcon(parsed.value);
       const svgMarkup = customIcon ? extractSvgMarkup(customIcon.svg) : null;
 
-      if (svgMarkup) {
-        iconEl.innerHTML = svgMarkup;
+      if (svgMarkup && replaceWithSvgMarkup(iconEl, svgMarkup)) {
         iconEl.classList.add("mod-custom-svg");
         iconEl.dataset.iconName = customIcon?.name ?? parsed.value;
         return;
@@ -664,11 +690,6 @@ export default class FileFolderIconReplacerPlugin extends Plugin {
         return;
       }
 
-      if (!child.dataset.fileFolderIconReplacerOriginalDisplay) {
-        child.dataset.fileFolderIconReplacerOriginalDisplay = child.style.display || "__empty__";
-      }
-
-      child.style.display = "none";
       child.dataset.fileFolderIconReplacerHidden = "true";
     });
 
@@ -687,11 +708,6 @@ export default class FileFolderIconReplacerPlugin extends Plugin {
         return;
       }
 
-      if (!targetEl.dataset.fileFolderIconReplacerOriginalDisplay) {
-        targetEl.dataset.fileFolderIconReplacerOriginalDisplay = targetEl.style.display || "__empty__";
-      }
-
-      targetEl.style.display = "none";
       targetEl.dataset.fileFolderIconReplacerHidden = "true";
     });
   }
@@ -711,10 +727,7 @@ export default class FileFolderIconReplacerPlugin extends Plugin {
     this.app.workspace.containerEl
       .querySelectorAll<HTMLElement>("[data-file-folder-icon-replacer-hidden='true']")
       .forEach((element) => {
-        const previousDisplay = element.dataset.fileFolderIconReplacerOriginalDisplay;
-        element.style.display = previousDisplay && previousDisplay !== "__empty__" ? previousDisplay : "";
         delete element.dataset.fileFolderIconReplacerHidden;
-        delete element.dataset.fileFolderIconReplacerOriginalDisplay;
       });
   }
 
@@ -727,7 +740,8 @@ export default class FileFolderIconReplacerPlugin extends Plugin {
       const originalMarkup = element.dataset.fileFolderIconReplacerOriginalMarkup;
       const originalClass = element.dataset.fileFolderIconReplacerOriginalClass;
       if (typeof originalMarkup === "string") {
-        element.innerHTML = originalMarkup;
+        clearElement(element);
+        replaceWithSvgMarkup(element, originalMarkup);
       }
       if (typeof originalClass === "string") {
         element.className = originalClass;
@@ -929,7 +943,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "File Folder Icon Replacer" });
+    new Setting(containerEl).setName("File Folder Icon Replacer").setHeading();
     containerEl.createEl("p", {
       text: "支持全局图标、最近使用、自定义 SVG 图标、按文件后缀规则，以及按文件夹名称规则。",
     });
@@ -943,7 +957,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
   }
 
   private renderGlobalSection(): void {
-    this.containerEl.createEl("h3", { text: "全局图标" });
+    new Setting(this.containerEl).setName("全局图标").setHeading();
 
     this.addIconSetting(
       "文件图标",
@@ -977,7 +991,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
   }
 
   private renderRecentSection(): void {
-    this.containerEl.createEl("h3", { text: "最近使用" });
+    new Setting(this.containerEl).setName("最近使用").setHeading();
     const helpEl = this.containerEl.createEl("p", {
       cls: "file-folder-icon-replacer__section-help",
       text: "这里会显示你最近选择过的内置图标和自定义 SVG 图标。",
@@ -1020,7 +1034,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
   }
 
   private renderCustomIconsSection(): void {
-    this.containerEl.createEl("h3", { text: "自定义 SVG 图标" });
+    new Setting(this.containerEl).setName("自定义 SVG 图标").setHeading();
     this.containerEl.createEl("p", {
       cls: "file-folder-icon-replacer__section-help",
       text: "可粘贴或手写 SVG，用作你的手绘图标。保存后会出现在选择器和规则面板里。",
@@ -1141,7 +1155,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
   }
 
   private renderPathOverridesSection(): void {
-    this.containerEl.createEl("h3", { text: "局部图标" });
+    new Setting(this.containerEl).setName("局部图标").setHeading();
     this.containerEl.createEl("p", {
       cls: "file-folder-icon-replacer__section-help",
       text: "这里显示通过文件管理器右键菜单为具体文件或文件夹设置的图标。它们的优先级高于后缀规则和名称规则。",
@@ -1244,7 +1258,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
   }
 
   private renderFileRulesSection(): void {
-    this.containerEl.createEl("h3", { text: "按文件后缀替换" });
+    new Setting(this.containerEl).setName("按文件后缀替换").setHeading();
     this.containerEl.createEl("p", {
       cls: "file-folder-icon-replacer__section-help",
       text: "按后缀精确匹配，例如 md、png、pdf、ts。规则按列表顺序匹配，第一个命中的规则生效。",
@@ -1323,7 +1337,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
   }
 
   private renderFolderRulesSection(): void {
-    this.containerEl.createEl("h3", { text: "按文件夹名称替换" });
+    new Setting(this.containerEl).setName("按文件夹名称替换").setHeading();
     this.containerEl.createEl("p", {
       cls: "file-folder-icon-replacer__section-help",
       text: "按文件夹名称精确匹配，例如 Assets、Templates、Projects。可分别设置折叠和展开图标。",
@@ -1525,8 +1539,7 @@ class IconReplacerSettingTab extends PluginSettingTab {
     if (parsed.type === "custom") {
       const customIcon = this.plugin.getCustomIcon(parsed.value);
       const svgMarkup = customIcon ? extractSvgMarkup(customIcon.svg) : null;
-      if (svgMarkup) {
-        previewEl.innerHTML = svgMarkup;
+      if (svgMarkup && replaceWithSvgMarkup(previewEl, svgMarkup)) {
         return;
       }
     }
@@ -1762,8 +1775,7 @@ class IconPickerModal extends Modal {
     if (parsed.type === "custom") {
       const customIcon = this.options.plugin.getCustomIcon(parsed.value);
       const svgMarkup = customIcon ? extractSvgMarkup(customIcon.svg) : null;
-      if (svgMarkup) {
-        previewEl.innerHTML = svgMarkup;
+      if (svgMarkup && replaceWithSvgMarkup(previewEl, svgMarkup)) {
         return;
       }
     }
@@ -1854,8 +1866,7 @@ class IconPickerModal extends Modal {
     if (parsed.type === "custom") {
       const customIcon = this.options.plugin.getCustomIcon(parsed.value);
       const svgMarkup = customIcon ? extractSvgMarkup(customIcon.svg) : null;
-      if (svgMarkup) {
-        iconEl.innerHTML = svgMarkup;
+      if (svgMarkup && replaceWithSvgMarkup(iconEl, svgMarkup)) {
       } else {
         setIcon(iconEl, "circle-help");
       }
@@ -1989,8 +2000,7 @@ class FolderOverridePickerModal extends Modal {
       if (parsed.type === "custom") {
         const customIcon = this.options.plugin.getCustomIcon(parsed.value);
         const svgMarkup = customIcon ? extractSvgMarkup(customIcon.svg) : null;
-        if (svgMarkup) {
-          previewEl.innerHTML = svgMarkup;
+        if (svgMarkup && replaceWithSvgMarkup(previewEl, svgMarkup)) {
         } else {
           setIcon(previewEl, "circle-help");
         }
@@ -2207,7 +2217,7 @@ class CustomIconEditorModal extends Modal {
       return;
     }
 
-    this.previewEl.innerHTML = svgMarkup;
+    replaceWithSvgMarkup(this.previewEl, svgMarkup);
   }
 
   private bindCanvasDrawing(): void {

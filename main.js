@@ -104,7 +104,7 @@ function parseSvgElement(svgMarkup) {
   const parser = new DOMParser();
   const documentEl = parser.parseFromString(svgMarkup, "image/svg+xml");
   const svgEl = documentEl.documentElement;
-  if (!(svgEl instanceof SVGSVGElement) || svgEl.tagName.toLowerCase() !== "svg") {
+  if (!svgEl.instanceOf(SVGSVGElement) || svgEl.tagName.toLowerCase() !== "svg") {
     return null;
   }
   if (svgEl.querySelector("parsererror")) {
@@ -120,6 +120,11 @@ function replaceWithSvgMarkup(containerEl, svgMarkup) {
   clearElement(containerEl);
   containerEl.appendChild(svgEl);
   return true;
+}
+function runAsync(callback) {
+  return () => {
+    void callback();
+  };
 }
 function escapeAttribute(value) {
   return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
@@ -377,7 +382,7 @@ var FileFolderIconReplacerPlugin = class extends import_obsidian.Plugin {
           this.scheduleRefresh();
           return;
         }
-        if (mutation.type === "attributes" && mutation.target instanceof HTMLElement && (mutation.target.matches(".nav-folder") || mutation.target.matches(".nav-folder-title"))) {
+        if (mutation.type === "attributes" && mutation.target.instanceOf(HTMLElement) && (mutation.target.matches(".nav-folder") || mutation.target.matches(".nav-folder-title"))) {
           this.scheduleRefresh();
           return;
         }
@@ -412,7 +417,7 @@ var FileFolderIconReplacerPlugin = class extends import_obsidian.Plugin {
       reusableIconEl.dataset.fileFolderIconReplacerInjected = "false";
       return reusableIconEl;
     }
-    const createdIconEl = document.createElement("span");
+    const createdIconEl = createSpan();
     createdIconEl.className = ICON_CLASS;
     createdIconEl.dataset.fileFolderIconReplacerIcon = "true";
     createdIconEl.dataset.fileFolderIconReplacerInjected = "true";
@@ -468,10 +473,10 @@ var FileFolderIconReplacerPlugin = class extends import_obsidian.Plugin {
   findReusableIconElement(parentEl, contentEl) {
     const directChildren = Array.from(parentEl.children);
     const contentIndex = directChildren.indexOf(contentEl);
-    const candidates = directChildren.slice(0, contentIndex).filter((child) => child instanceof HTMLElement);
+    const candidates = directChildren.slice(0, contentIndex).filter((child) => child.instanceOf(HTMLElement));
     for (let index = candidates.length - 1; index >= 0; index -= 1) {
       const candidate = candidates[index];
-      if (!(candidate instanceof HTMLElement)) {
+      if (!candidate || !candidate.instanceOf(HTMLElement)) {
         continue;
       }
       if (this.shouldKeepFolderIndicator(candidate)) {
@@ -488,7 +493,7 @@ var FileFolderIconReplacerPlugin = class extends import_obsidian.Plugin {
     const directChildren = Array.from(parentEl.children);
     const contentIndex = directChildren.indexOf(contentEl);
     directChildren.forEach((child, index) => {
-      if (!(child instanceof HTMLElement)) {
+      if (!child.instanceOf(HTMLElement)) {
         return;
       }
       if (child.classList.contains(ICON_CLASS)) {
@@ -611,11 +616,11 @@ var FileFolderIconReplacerPlugin = class extends import_obsidian.Plugin {
       });
       if (this.getFolderPathOverride(file.path)) {
         menu.addItem((item) => {
-          item.setTitle("Clear custom folder icon").setIcon("eraser").setWarning(true).onClick(async () => {
+          item.setTitle("Clear custom folder icon").setIcon("eraser").setWarning(true).onClick(runAsync(async () => {
             this.settings.folderPathOverrides = this.settings.folderPathOverrides.filter((entry) => entry.path !== file.path);
             await this.persistAndRefresh();
             new import_obsidian.Notice(`Cleared folder icon: ${file.path}`);
-          });
+          }));
         });
       }
       return;
@@ -628,11 +633,11 @@ var FileFolderIconReplacerPlugin = class extends import_obsidian.Plugin {
       });
       if (this.getFilePathOverride(file.path)) {
         menu.addItem((item) => {
-          item.setTitle("Clear custom file icon").setIcon("eraser").setWarning(true).onClick(async () => {
+          item.setTitle("Clear custom file icon").setIcon("eraser").setWarning(true).onClick(runAsync(async () => {
             this.settings.filePathOverrides = this.settings.filePathOverrides.filter((entry) => entry.path !== file.path);
             await this.persistAndRefresh();
             new import_obsidian.Notice(`Cleared file icon: ${file.path}`);
-          });
+          }));
         });
       }
     }
@@ -747,7 +752,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
     });
     const gridEl = this.containerEl.createDiv({ cls: "file-folder-icon-replacer__recent-grid" });
     if (this.plugin.settings.recentIcons.length === 0) {
-      gridEl.createEl("div", {
+      gridEl.createDiv({
         cls: "file-folder-icon-replacer__empty-state",
         text: "\u8FD8\u6CA1\u6709\u6700\u8FD1\u4F7F\u7528\u7684\u56FE\u6807\u3002"
       });
@@ -768,11 +773,11 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
         text: "\u79FB\u9664",
         attr: { type: "button" }
       });
-      deleteButton.addEventListener("click", async () => {
+      deleteButton.addEventListener("click", runAsync(async () => {
         this.plugin.settings.recentIcons = this.plugin.settings.recentIcons.filter((item) => item !== iconRef);
         await this.plugin.saveSettings();
         this.display();
-      });
+      }));
     });
     helpEl.insertAdjacentText("beforeend", " \u9009\u62E9\u5668\u4E2D\u4E5F\u4F1A\u4F18\u5148\u663E\u793A\u8FD9\u4E9B\u56FE\u6807\u3002");
   }
@@ -798,7 +803,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
     });
     const listEl = this.containerEl.createDiv({ cls: "file-folder-icon-replacer__custom-list" });
     if (this.plugin.settings.customIcons.length === 0) {
-      listEl.createEl("div", {
+      listEl.createDiv({
         cls: "file-folder-icon-replacer__empty-state",
         text: "\u8FD8\u6CA1\u6709\u81EA\u5B9A\u4E49 SVG \u56FE\u6807\u3002"
       });
@@ -811,7 +816,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
       this.renderPreview(previewEl, makeCustomIconRef(icon.id));
       const titleWrapEl = headerEl.createDiv({ cls: "file-folder-icon-replacer__rule-title-wrap" });
       titleWrapEl.createEl("strong", { text: icon.name });
-      titleWrapEl.createEl("div", {
+      titleWrapEl.createDiv({
         cls: "file-folder-icon-replacer__rule-meta",
         text: `ID: ${icon.id}`
       });
@@ -838,7 +843,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
         cls: "mod-warning",
         attr: { type: "button" }
       });
-      deleteButton.addEventListener("click", async () => {
+      deleteButton.addEventListener("click", runAsync(async () => {
         this.plugin.settings.customIcons = this.plugin.settings.customIcons.filter((item) => item.id !== icon.id);
         this.plugin.settings.recentIcons = this.plugin.settings.recentIcons.filter(
           (item) => item !== makeCustomIconRef(icon.id)
@@ -873,7 +878,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.persistAndRefresh();
         this.display();
         new import_obsidian.Notice(`\u5DF2\u5220\u9664\u81EA\u5B9A\u4E49\u56FE\u6807: ${icon.name}`);
-      });
+      }));
     });
   }
   renderPathOverridesSection() {
@@ -886,7 +891,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
     const fileOverrides = this.plugin.settings.filePathOverrides;
     const folderOverrides = this.plugin.settings.folderPathOverrides;
     if (fileOverrides.length === 0 && folderOverrides.length === 0) {
-      listEl.createEl("div", {
+      listEl.createDiv({
         cls: "file-folder-icon-replacer__empty-state",
         text: "\u8FD8\u6CA1\u6709\u5C40\u90E8\u56FE\u6807\u3002"
       });
@@ -899,7 +904,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
       this.renderPreview(previewEl, override.iconRef);
       const titleWrapEl = headerEl.createDiv({ cls: "file-folder-icon-replacer__rule-title-wrap" });
       titleWrapEl.createEl("strong", { text: getBaseName(override.path) });
-      titleWrapEl.createEl("div", {
+      titleWrapEl.createDiv({
         cls: "file-folder-icon-replacer__rule-meta",
         text: override.path
       });
@@ -923,11 +928,11 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
         cls: "mod-warning",
         attr: { type: "button" }
       });
-      deleteButton.addEventListener("click", async () => {
+      deleteButton.addEventListener("click", runAsync(async () => {
         this.plugin.settings.filePathOverrides = this.plugin.settings.filePathOverrides.filter((item) => item.id !== override.id);
         await this.plugin.persistAndRefresh();
         this.display();
-      });
+      }));
     });
     folderOverrides.forEach((override) => {
       const cardEl = listEl.createDiv({ cls: "file-folder-icon-replacer__rule-card" });
@@ -939,7 +944,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
       this.renderPreview(openPreviewEl, override.openIconRef);
       const titleWrapEl = headerEl.createDiv({ cls: "file-folder-icon-replacer__rule-title-wrap" });
       titleWrapEl.createEl("strong", { text: getBaseName(override.path) });
-      titleWrapEl.createEl("div", {
+      titleWrapEl.createDiv({
         cls: "file-folder-icon-replacer__rule-meta",
         text: override.path
       });
@@ -958,13 +963,13 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
         cls: "mod-warning",
         attr: { type: "button" }
       });
-      deleteButton.addEventListener("click", async () => {
+      deleteButton.addEventListener("click", runAsync(async () => {
         this.plugin.settings.folderPathOverrides = this.plugin.settings.folderPathOverrides.filter(
           (item) => item.id !== override.id
         );
         await this.plugin.persistAndRefresh();
         this.display();
-      });
+      }));
     });
   }
   renderFileRulesSection() {
@@ -974,7 +979,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
       text: "\u6309\u540E\u7F00\u7CBE\u786E\u5339\u914D\uFF0C\u4F8B\u5982 md\u3001png\u3001pdf\u3001ts\u3002\u89C4\u5219\u6309\u5217\u8868\u987A\u5E8F\u5339\u914D\uFF0C\u7B2C\u4E00\u4E2A\u547D\u4E2D\u7684\u89C4\u5219\u751F\u6548\u3002"
     });
     new import_obsidian.Setting(this.containerEl).setName("\u65B0\u589E\u6587\u4EF6\u89C4\u5219").setDesc("\u4E3A\u7279\u5B9A\u540E\u7F00\u8BBE\u7F6E\u56FE\u6807\u3002").addButton((button) => {
-      button.setButtonText("\u6DFB\u52A0\u89C4\u5219").onClick(async () => {
+      button.setButtonText("\u6DFB\u52A0\u89C4\u5219").onClick(runAsync(async () => {
         this.plugin.settings.fileRules.push({
           id: createId(),
           extension: "md",
@@ -982,11 +987,11 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
         });
         await this.plugin.persistAndRefresh();
         this.display();
-      });
+      }));
     });
     const listEl = this.containerEl.createDiv({ cls: "file-folder-icon-replacer__rules-list" });
     if (this.plugin.settings.fileRules.length === 0) {
-      listEl.createEl("div", {
+      listEl.createDiv({
         cls: "file-folder-icon-replacer__empty-state",
         text: "\u8FD8\u6CA1\u6709\u6587\u4EF6\u540E\u7F00\u89C4\u5219\u3002"
       });
@@ -1011,11 +1016,11 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
         attr: { type: "text", placeholder: "\u4F8B\u5982 md" }
       });
       extInputEl.value = rule.extension;
-      extInputEl.addEventListener("change", async () => {
+      extInputEl.addEventListener("change", runAsync(async () => {
         rule.extension = normalizeExtension(extInputEl.value);
         extInputEl.value = rule.extension;
         await this.plugin.persistAndRefresh();
-      });
+      }));
       const iconWrapEl = rowEl.createDiv({ cls: "file-folder-icon-replacer__field" });
       iconWrapEl.createEl("label", { text: "\u56FE\u6807" });
       this.buildRuleIconPicker(
@@ -1028,11 +1033,11 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
       );
       const actionEl = rowEl.createDiv({ cls: "file-folder-icon-replacer__rule-inline-actions" });
       const deleteButton = actionEl.createEl("button", { text: "\u5220\u9664", cls: "mod-warning", attr: { type: "button" } });
-      deleteButton.addEventListener("click", async () => {
+      deleteButton.addEventListener("click", runAsync(async () => {
         this.plugin.settings.fileRules = this.plugin.settings.fileRules.filter((item) => item.id !== rule.id);
         await this.plugin.persistAndRefresh();
         this.display();
-      });
+      }));
     });
   }
   renderFolderRulesSection() {
@@ -1042,7 +1047,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
       text: "\u6309\u6587\u4EF6\u5939\u540D\u79F0\u7CBE\u786E\u5339\u914D\uFF0C\u4F8B\u5982 Assets\u3001Templates\u3001Projects\u3002\u53EF\u5206\u522B\u8BBE\u7F6E\u6298\u53E0\u548C\u5C55\u5F00\u56FE\u6807\u3002"
     });
     new import_obsidian.Setting(this.containerEl).setName("\u65B0\u589E\u6587\u4EF6\u5939\u89C4\u5219").setDesc("\u4E3A\u7279\u5B9A\u6587\u4EF6\u5939\u540D\u79F0\u8BBE\u7F6E\u56FE\u6807\u3002").addButton((button) => {
-      button.setButtonText("\u6DFB\u52A0\u89C4\u5219").onClick(async () => {
+      button.setButtonText("\u6DFB\u52A0\u89C4\u5219").onClick(runAsync(async () => {
         this.plugin.settings.folderRules.push({
           id: createId(),
           folderName: "Assets",
@@ -1051,11 +1056,11 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
         });
         await this.plugin.persistAndRefresh();
         this.display();
-      });
+      }));
     });
     const listEl = this.containerEl.createDiv({ cls: "file-folder-icon-replacer__rules-list" });
     if (this.plugin.settings.folderRules.length === 0) {
-      listEl.createEl("div", {
+      listEl.createDiv({
         cls: "file-folder-icon-replacer__empty-state",
         text: "\u8FD8\u6CA1\u6709\u6587\u4EF6\u5939\u540D\u79F0\u89C4\u5219\u3002"
       });
@@ -1079,11 +1084,11 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
         attr: { type: "text", placeholder: "\u4F8B\u5982 Assets" }
       });
       nameInputEl.value = rule.folderName;
-      nameInputEl.addEventListener("change", async () => {
+      nameInputEl.addEventListener("change", runAsync(async () => {
         rule.folderName = normalizeFolderName(nameInputEl.value);
         nameInputEl.value = rule.folderName;
         await this.plugin.persistAndRefresh();
-      });
+      }));
       const gridEl = cardEl.createDiv({ cls: "file-folder-icon-replacer__rule-grid file-folder-icon-replacer__rule-grid--folder" });
       const closedWrapEl = gridEl.createDiv({ cls: "file-folder-icon-replacer__field" });
       closedWrapEl.createEl("label", { text: "\u6298\u53E0\u56FE\u6807" });
@@ -1107,11 +1112,11 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
       );
       const actionEl = cardEl.createDiv({ cls: "file-folder-icon-replacer__rule-inline-actions" });
       const deleteButton = actionEl.createEl("button", { text: "\u5220\u9664\u89C4\u5219", cls: "mod-warning", attr: { type: "button" } });
-      deleteButton.addEventListener("click", async () => {
+      deleteButton.addEventListener("click", runAsync(async () => {
         this.plugin.settings.folderRules = this.plugin.settings.folderRules.filter((item) => item.id !== rule.id);
         await this.plugin.persistAndRefresh();
         this.display();
-      });
+      }));
     });
   }
   addIconSetting(name, desc, value, fallbackValue, onSave) {
@@ -1381,11 +1386,11 @@ var IconPickerModal = class extends import_obsidian.Modal {
     const labelWrapEl = this.currentSelectionEl.createDiv({
       cls: "file-folder-icon-replacer__picker-current-copy"
     });
-    labelWrapEl.createEl("div", {
+    labelWrapEl.createDiv({
       cls: "file-folder-icon-replacer__picker-current-label",
       text: "\u5F53\u524D\u9009\u62E9"
     });
-    labelWrapEl.createEl("div", {
+    labelWrapEl.createDiv({
       cls: "file-folder-icon-replacer__picker-current-name",
       text: this.options.plugin.describeIconRef(this.options.selectedIconRef)
     });
@@ -1409,7 +1414,7 @@ var IconPickerModal = class extends import_obsidian.Modal {
       return !normalizedQuery || label.includes(normalizedQuery);
     });
     if (matches.length === 0) {
-      this.recentGridEl.createEl("div", {
+      this.recentGridEl.createDiv({
         cls: "file-folder-icon-replacer__picker-empty",
         text: "\u6CA1\u6709\u5339\u914D\u7684\u6700\u8FD1\u4F7F\u7528\u56FE\u6807\u3002"
       });
@@ -1434,7 +1439,7 @@ var IconPickerModal = class extends import_obsidian.Modal {
       return true;
     });
     if (merged.length === 0) {
-      this.allGridEl.createEl("div", {
+      this.allGridEl.createDiv({
         cls: "file-folder-icon-replacer__picker-empty",
         text: "\u6CA1\u6709\u627E\u5230\u5339\u914D\u7684\u56FE\u6807\u3002"
       });
@@ -1463,18 +1468,17 @@ var IconPickerModal = class extends import_obsidian.Modal {
     if (parsed.type === "custom") {
       const customIcon = this.options.plugin.getCustomIcon(parsed.value);
       const svgMarkup = customIcon ? extractSvgMarkup(customIcon.svg) : null;
-      if (svgMarkup && replaceWithSvgMarkup(iconEl, svgMarkup)) {
-      } else {
+      if (!svgMarkup || !replaceWithSvgMarkup(iconEl, svgMarkup)) {
         (0, import_obsidian.setIcon)(iconEl, "circle-help");
       }
     } else {
       (0, import_obsidian.setIcon)(iconEl, parsed.value);
     }
-    itemEl.addEventListener("click", async () => {
+    itemEl.addEventListener("click", runAsync(async () => {
       await this.options.onChoose(iconRef);
       this.close();
       new import_obsidian.Notice(`\u5DF2\u9009\u62E9\u56FE\u6807: ${this.options.plugin.describeIconRef(iconRef)}`);
-    });
+    }));
     labelEl.title = iconRef;
   }
 };
@@ -1557,10 +1561,10 @@ var FolderOverridePickerModal = class extends import_obsidian.Modal {
       attr: { type: "button" }
     });
     cancelButton.addEventListener("click", () => this.close());
-    saveButton.addEventListener("click", async () => {
+    saveButton.addEventListener("click", runAsync(async () => {
       await this.options.onChoose(this.closedIconRef, this.openIconRef);
       this.close();
-    });
+    }));
   }
   onClose() {
     this.contentEl.empty();
@@ -1572,8 +1576,7 @@ var FolderOverridePickerModal = class extends import_obsidian.Modal {
       if (parsed.type === "custom") {
         const customIcon = this.options.plugin.getCustomIcon(parsed.value);
         const svgMarkup = customIcon ? extractSvgMarkup(customIcon.svg) : null;
-        if (svgMarkup && replaceWithSvgMarkup(previewEl, svgMarkup)) {
-        } else {
+        if (!svgMarkup || !replaceWithSvgMarkup(previewEl, svgMarkup)) {
           (0, import_obsidian.setIcon)(previewEl, "circle-help");
         }
       } else {
@@ -1660,7 +1663,7 @@ var CustomIconEditorModal = class extends import_obsidian.Modal {
       }
     });
     this.svgFileInputEl.className = "file-folder-icon-replacer__hidden-input";
-    this.svgFileInputEl.addEventListener("change", async () => {
+    this.svgFileInputEl.addEventListener("change", runAsync(async () => {
       const file = this.svgFileInputEl?.files?.[0];
       if (!file) {
         return;
@@ -1681,7 +1684,7 @@ var CustomIconEditorModal = class extends import_obsidian.Modal {
       if (this.svgFileInputEl) {
         this.svgFileInputEl.value = "";
       }
-    });
+    }));
     this.drawingCanvasEl = drawFieldEl.createEl("canvas", {
       cls: "file-folder-icon-replacer__draw-canvas",
       attr: {
@@ -1730,7 +1733,7 @@ var CustomIconEditorModal = class extends import_obsidian.Modal {
       attr: { type: "button" }
     });
     cancelButton.addEventListener("click", () => this.close());
-    saveButton.addEventListener("click", async () => {
+    saveButton.addEventListener("click", runAsync(async () => {
       const name = this.nameInputEl?.value.trim() || "Custom SVG";
       this.syncDrawingToSvgEditor();
       const svg = this.svgInputEl?.value.trim() ?? "";
@@ -1745,7 +1748,7 @@ var CustomIconEditorModal = class extends import_obsidian.Modal {
         svg: svgMarkup
       });
       this.close();
-    });
+    }));
   }
   onClose() {
     this.pointerId = null;
@@ -1759,7 +1762,7 @@ var CustomIconEditorModal = class extends import_obsidian.Modal {
     clearElement(this.previewEl);
     const svgMarkup = extractSvgMarkup(this.svgInputEl?.value ?? "");
     if (!svgMarkup) {
-      this.previewEl.createEl("div", {
+      this.previewEl.createDiv({
         cls: "file-folder-icon-replacer__empty-state",
         text: "SVG \u9884\u89C8\u4E0D\u53EF\u7528\uFF0C\u8BF7\u68C0\u67E5\u5185\u5BB9\u683C\u5F0F\u3002"
       });

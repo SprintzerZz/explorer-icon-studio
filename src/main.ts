@@ -658,7 +658,7 @@ export default class FileFolderIconReplacerPlugin extends Plugin {
 
     for (let index = candidates.length - 1; index >= 0; index -= 1) {
       const candidate = candidates[index];
-      if (!candidate.instanceOf(HTMLElement)) {
+      if (!candidate || !candidate.instanceOf(HTMLElement)) {
         continue;
       }
 

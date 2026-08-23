@@ -100,6 +100,27 @@ function extractSvgMarkup(svgText) {
   }
   return trimmed;
 }
+function parseSvgElement(svgMarkup) {
+  const parser = new DOMParser();
+  const documentEl = parser.parseFromString(svgMarkup, "image/svg+xml");
+  const svgEl = documentEl.documentElement;
+  if (!(svgEl instanceof SVGSVGElement) || svgEl.tagName.toLowerCase() !== "svg") {
+    return null;
+  }
+  if (svgEl.querySelector("parsererror")) {
+    return null;
+  }
+  return svgEl.cloneNode(true);
+}
+function replaceWithSvgMarkup(containerEl, svgMarkup) {
+  const svgEl = parseSvgElement(svgMarkup);
+  if (!svgEl) {
+    return false;
+  }
+  clearElement(containerEl);
+  containerEl.appendChild(svgEl);
+  return true;
+}
 function escapeAttribute(value) {
   return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
@@ -406,8 +427,7 @@ var FileFolderIconReplacerPlugin = class extends import_obsidian.Plugin {
     if (parsed.type === "custom") {
       const customIcon = this.getCustomIcon(parsed.value);
       const svgMarkup = customIcon ? extractSvgMarkup(customIcon.svg) : null;
-      if (svgMarkup) {
-        iconEl.innerHTML = svgMarkup;
+      if (svgMarkup && replaceWithSvgMarkup(iconEl, svgMarkup)) {
         iconEl.classList.add("mod-custom-svg");
         iconEl.dataset.iconName = customIcon?.name ?? parsed.value;
         return;
@@ -480,10 +500,6 @@ var FileFolderIconReplacerPlugin = class extends import_obsidian.Plugin {
       if (isFolderTitle && this.shouldKeepFolderIndicator(child)) {
         return;
       }
-      if (!child.dataset.fileFolderIconReplacerOriginalDisplay) {
-        child.dataset.fileFolderIconReplacerOriginalDisplay = child.style.display || "__empty__";
-      }
-      child.style.display = "none";
       child.dataset.fileFolderIconReplacerHidden = "true";
     });
     parentEl.querySelectorAll(".svg-icon, .nav-file-title-icon, .nav-folder-title-icon").forEach((element) => {
@@ -498,10 +514,6 @@ var FileFolderIconReplacerPlugin = class extends import_obsidian.Plugin {
       if (targetEl === contentEl || contentEl.contains(targetEl)) {
         return;
       }
-      if (!targetEl.dataset.fileFolderIconReplacerOriginalDisplay) {
-        targetEl.dataset.fileFolderIconReplacerOriginalDisplay = targetEl.style.display || "__empty__";
-      }
-      targetEl.style.display = "none";
       targetEl.dataset.fileFolderIconReplacerHidden = "true";
     });
   }
@@ -510,10 +522,7 @@ var FileFolderIconReplacerPlugin = class extends import_obsidian.Plugin {
   }
   restoreOriginalIcons() {
     this.app.workspace.containerEl.querySelectorAll("[data-file-folder-icon-replacer-hidden='true']").forEach((element) => {
-      const previousDisplay = element.dataset.fileFolderIconReplacerOriginalDisplay;
-      element.style.display = previousDisplay && previousDisplay !== "__empty__" ? previousDisplay : "";
       delete element.dataset.fileFolderIconReplacerHidden;
-      delete element.dataset.fileFolderIconReplacerOriginalDisplay;
     });
   }
   restoreReusedIconElements() {
@@ -524,7 +533,8 @@ var FileFolderIconReplacerPlugin = class extends import_obsidian.Plugin {
       const originalMarkup = element.dataset.fileFolderIconReplacerOriginalMarkup;
       const originalClass = element.dataset.fileFolderIconReplacerOriginalClass;
       if (typeof originalMarkup === "string") {
-        element.innerHTML = originalMarkup;
+        clearElement(element);
+        replaceWithSvgMarkup(element, originalMarkup);
       }
       if (typeof originalClass === "string") {
         element.className = originalClass;
@@ -688,7 +698,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "File Folder Icon Replacer" });
+    new import_obsidian.Setting(containerEl).setName("File Folder Icon Replacer").setHeading();
     containerEl.createEl("p", {
       text: "\u652F\u6301\u5168\u5C40\u56FE\u6807\u3001\u6700\u8FD1\u4F7F\u7528\u3001\u81EA\u5B9A\u4E49 SVG \u56FE\u6807\u3001\u6309\u6587\u4EF6\u540E\u7F00\u89C4\u5219\uFF0C\u4EE5\u53CA\u6309\u6587\u4EF6\u5939\u540D\u79F0\u89C4\u5219\u3002"
     });
@@ -700,7 +710,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
     this.renderFolderRulesSection();
   }
   renderGlobalSection() {
-    this.containerEl.createEl("h3", { text: "\u5168\u5C40\u56FE\u6807" });
+    new import_obsidian.Setting(this.containerEl).setName("\u5168\u5C40\u56FE\u6807").setHeading();
     this.addIconSetting(
       "\u6587\u4EF6\u56FE\u6807",
       "\u6240\u6709\u666E\u901A\u6587\u4EF6\u7684\u9ED8\u8BA4\u56FE\u6807\u3002",
@@ -730,7 +740,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
     );
   }
   renderRecentSection() {
-    this.containerEl.createEl("h3", { text: "\u6700\u8FD1\u4F7F\u7528" });
+    new import_obsidian.Setting(this.containerEl).setName("\u6700\u8FD1\u4F7F\u7528").setHeading();
     const helpEl = this.containerEl.createEl("p", {
       cls: "file-folder-icon-replacer__section-help",
       text: "\u8FD9\u91CC\u4F1A\u663E\u793A\u4F60\u6700\u8FD1\u9009\u62E9\u8FC7\u7684\u5185\u7F6E\u56FE\u6807\u548C\u81EA\u5B9A\u4E49 SVG \u56FE\u6807\u3002"
@@ -767,7 +777,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
     helpEl.insertAdjacentText("beforeend", " \u9009\u62E9\u5668\u4E2D\u4E5F\u4F1A\u4F18\u5148\u663E\u793A\u8FD9\u4E9B\u56FE\u6807\u3002");
   }
   renderCustomIconsSection() {
-    this.containerEl.createEl("h3", { text: "\u81EA\u5B9A\u4E49 SVG \u56FE\u6807" });
+    new import_obsidian.Setting(this.containerEl).setName("\u81EA\u5B9A\u4E49 SVG \u56FE\u6807").setHeading();
     this.containerEl.createEl("p", {
       cls: "file-folder-icon-replacer__section-help",
       text: "\u53EF\u7C98\u8D34\u6216\u624B\u5199 SVG\uFF0C\u7528\u4F5C\u4F60\u7684\u624B\u7ED8\u56FE\u6807\u3002\u4FDD\u5B58\u540E\u4F1A\u51FA\u73B0\u5728\u9009\u62E9\u5668\u548C\u89C4\u5219\u9762\u677F\u91CC\u3002"
@@ -867,7 +877,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
     });
   }
   renderPathOverridesSection() {
-    this.containerEl.createEl("h3", { text: "\u5C40\u90E8\u56FE\u6807" });
+    new import_obsidian.Setting(this.containerEl).setName("\u5C40\u90E8\u56FE\u6807").setHeading();
     this.containerEl.createEl("p", {
       cls: "file-folder-icon-replacer__section-help",
       text: "\u8FD9\u91CC\u663E\u793A\u901A\u8FC7\u6587\u4EF6\u7BA1\u7406\u5668\u53F3\u952E\u83DC\u5355\u4E3A\u5177\u4F53\u6587\u4EF6\u6216\u6587\u4EF6\u5939\u8BBE\u7F6E\u7684\u56FE\u6807\u3002\u5B83\u4EEC\u7684\u4F18\u5148\u7EA7\u9AD8\u4E8E\u540E\u7F00\u89C4\u5219\u548C\u540D\u79F0\u89C4\u5219\u3002"
@@ -958,7 +968,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
     });
   }
   renderFileRulesSection() {
-    this.containerEl.createEl("h3", { text: "\u6309\u6587\u4EF6\u540E\u7F00\u66FF\u6362" });
+    new import_obsidian.Setting(this.containerEl).setName("\u6309\u6587\u4EF6\u540E\u7F00\u66FF\u6362").setHeading();
     this.containerEl.createEl("p", {
       cls: "file-folder-icon-replacer__section-help",
       text: "\u6309\u540E\u7F00\u7CBE\u786E\u5339\u914D\uFF0C\u4F8B\u5982 md\u3001png\u3001pdf\u3001ts\u3002\u89C4\u5219\u6309\u5217\u8868\u987A\u5E8F\u5339\u914D\uFF0C\u7B2C\u4E00\u4E2A\u547D\u4E2D\u7684\u89C4\u5219\u751F\u6548\u3002"
@@ -1026,7 +1036,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
     });
   }
   renderFolderRulesSection() {
-    this.containerEl.createEl("h3", { text: "\u6309\u6587\u4EF6\u5939\u540D\u79F0\u66FF\u6362" });
+    new import_obsidian.Setting(this.containerEl).setName("\u6309\u6587\u4EF6\u5939\u540D\u79F0\u66FF\u6362").setHeading();
     this.containerEl.createEl("p", {
       cls: "file-folder-icon-replacer__section-help",
       text: "\u6309\u6587\u4EF6\u5939\u540D\u79F0\u7CBE\u786E\u5339\u914D\uFF0C\u4F8B\u5982 Assets\u3001Templates\u3001Projects\u3002\u53EF\u5206\u522B\u8BBE\u7F6E\u6298\u53E0\u548C\u5C55\u5F00\u56FE\u6807\u3002"
@@ -1183,8 +1193,7 @@ var IconReplacerSettingTab = class extends import_obsidian.PluginSettingTab {
     if (parsed.type === "custom") {
       const customIcon = this.plugin.getCustomIcon(parsed.value);
       const svgMarkup = customIcon ? extractSvgMarkup(customIcon.svg) : null;
-      if (svgMarkup) {
-        previewEl.innerHTML = svgMarkup;
+      if (svgMarkup && replaceWithSvgMarkup(previewEl, svgMarkup)) {
         return;
       }
     }
@@ -1383,8 +1392,7 @@ var IconPickerModal = class extends import_obsidian.Modal {
     if (parsed.type === "custom") {
       const customIcon = this.options.plugin.getCustomIcon(parsed.value);
       const svgMarkup = customIcon ? extractSvgMarkup(customIcon.svg) : null;
-      if (svgMarkup) {
-        previewEl.innerHTML = svgMarkup;
+      if (svgMarkup && replaceWithSvgMarkup(previewEl, svgMarkup)) {
         return;
       }
     }
@@ -1455,8 +1463,7 @@ var IconPickerModal = class extends import_obsidian.Modal {
     if (parsed.type === "custom") {
       const customIcon = this.options.plugin.getCustomIcon(parsed.value);
       const svgMarkup = customIcon ? extractSvgMarkup(customIcon.svg) : null;
-      if (svgMarkup) {
-        iconEl.innerHTML = svgMarkup;
+      if (svgMarkup && replaceWithSvgMarkup(iconEl, svgMarkup)) {
       } else {
         (0, import_obsidian.setIcon)(iconEl, "circle-help");
       }
@@ -1565,8 +1572,7 @@ var FolderOverridePickerModal = class extends import_obsidian.Modal {
       if (parsed.type === "custom") {
         const customIcon = this.options.plugin.getCustomIcon(parsed.value);
         const svgMarkup = customIcon ? extractSvgMarkup(customIcon.svg) : null;
-        if (svgMarkup) {
-          previewEl.innerHTML = svgMarkup;
+        if (svgMarkup && replaceWithSvgMarkup(previewEl, svgMarkup)) {
         } else {
           (0, import_obsidian.setIcon)(previewEl, "circle-help");
         }
@@ -1759,7 +1765,7 @@ var CustomIconEditorModal = class extends import_obsidian.Modal {
       });
       return;
     }
-    this.previewEl.innerHTML = svgMarkup;
+    replaceWithSvgMarkup(this.previewEl, svgMarkup);
   }
   bindCanvasDrawing() {
     if (!this.drawingCanvasEl) {

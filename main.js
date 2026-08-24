@@ -216,7 +216,11 @@ var FileFolderIconReplacerPlugin = class extends import_obsidian.Plugin {
     this.registerEvent(this.app.workspace.on("css-change", () => this.scheduleRefresh()));
     this.registerEvent(this.app.vault.on("create", () => this.scheduleRefresh()));
     this.registerEvent(this.app.vault.on("delete", () => this.scheduleRefresh()));
-    this.registerEvent(this.app.vault.on("rename", () => this.scheduleRefresh()));
+    this.registerEvent(
+      this.app.vault.on("rename", (file, oldPath) => {
+        void this.handleRename(file, oldPath);
+      })
+    );
     this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
       this.addPathOverrideMenuItems(menu, file);
     }));
@@ -329,6 +333,57 @@ var FileFolderIconReplacerPlugin = class extends import_obsidian.Plugin {
     await this.saveSettings();
     this.refreshValidIcons();
     this.refreshIcons();
+  }
+  async handleRename(file, oldPath) {
+    let didChange = false;
+    if (file instanceof import_obsidian.TFile) {
+      this.settings.filePathOverrides = this.settings.filePathOverrides.map((override) => {
+        if (override.path !== oldPath) {
+          return override;
+        }
+        didChange = true;
+        return {
+          ...override,
+          path: file.path
+        };
+      });
+    }
+    if (file instanceof import_obsidian.TFolder) {
+      const oldPrefix = `${oldPath}/`;
+      const newPrefix = `${file.path}/`;
+      this.settings.folderPathOverrides = this.settings.folderPathOverrides.map((override) => {
+        if (override.path === oldPath) {
+          didChange = true;
+          return {
+            ...override,
+            path: file.path
+          };
+        }
+        if (!override.path.startsWith(oldPrefix)) {
+          return override;
+        }
+        didChange = true;
+        return {
+          ...override,
+          path: `${newPrefix}${override.path.slice(oldPrefix.length)}`
+        };
+      });
+      this.settings.filePathOverrides = this.settings.filePathOverrides.map((override) => {
+        if (!override.path.startsWith(oldPrefix)) {
+          return override;
+        }
+        didChange = true;
+        return {
+          ...override,
+          path: `${newPrefix}${override.path.slice(oldPrefix.length)}`
+        };
+      });
+    }
+    if (didChange) {
+      await this.saveSettings();
+      this.refreshValidIcons();
+    }
+    this.scheduleRefresh();
   }
   refreshIcons() {
     const root = this.app.workspace.containerEl;
